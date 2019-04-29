@@ -63,9 +63,9 @@ FillWithNaNs(PointCloud<PointType>& cloud, vector<int>& row_count, int col)
  *  @param rings - The number of rings in the Velodyne LiDAR unit
  */
 template <typename PointType> void
-OrganizePointCloud(const sensor_msgs::PointCloud2 msg,
-                   PointCloud<PointType>& cloud,
-                   int rings)
+OrganizePointCloud(sensor_msgs::PointCloud2 msg,
+                    PointCloud<PointType>& cloud,
+                    int rings)
 {
   // Convert the PC to the PointXYZIR point type so we can access the ring
   PointCloud<velodyne_pointcloud::PointXYZIR>::Ptr cloud_XYZIR
@@ -78,11 +78,12 @@ OrganizePointCloud(const sensor_msgs::PointCloud2 msg,
      organized cloud needs to be, so we deliberately over-size by 30%. We then
      create a temporary cloud, SPECIFICALLY with the organized cloud
      constructor*/
-  int columns = (cloud_XYZIR->points.size() / rings) * 1.3;
-  PointCloud<PointType> tmp_cloud(columns, rings);
-  tmp_cloud.height = static_cast<uint32_t>(rings);
-  tmp_cloud.width = static_cast<uint32_t>(columns);
-  tmp_cloud.is_dense = false;
+  int columns = (cloud_XYZIR->points.size() / rings) * 2.0;
+  PointCloud<pcl::PointXYZRGBNormal>::Ptr tmp_cloud_ptr (new PointCloud<pcl::PointXYZRGBNormal>);
+  tmp_cloud_ptr->points.resize(columns * rings);
+  tmp_cloud_ptr->height = static_cast<uint32_t>(rings);
+  tmp_cloud_ptr->width = static_cast<uint32_t>(columns);
+  tmp_cloud_ptr->is_dense = false;
 
   /* Iterate through the XYZIR points and fill the TMP cloud where the
      ring number determines the row the point is inserted into */
@@ -98,17 +99,17 @@ OrganizePointCloud(const sensor_msgs::PointCloud2 msg,
        organized cloud */
     if (row_count[ring] > col)
     {
-      FillWithNaNs(tmp_cloud, row_count, col);
+      FillWithNaNs(*tmp_cloud_ptr, row_count, col);
       col++;
     }
     PointType p;
     p.x = cloud_XYZIR->points[i].x;
     p.y = cloud_XYZIR->points[i].y;
     p.z = cloud_XYZIR->points[i].z;
-    tmp_cloud(row_count[ring], ring) = p; // cloud(col, row)
+    tmp_cloud_ptr->at(row_count[ring], ring) = p; // cloud(col, row)
     row_count[ring]++;
   }
-  FillWithNaNs(tmp_cloud, row_count, col); // Fill that last column
+  FillWithNaNs(*tmp_cloud_ptr, row_count, col); // Fill that last column
 
   /* Now we copy the organized tmp cloud to our output cloud, which we can now
      size correctly, knowing EXACTLY how many points are in each ring/row. But
@@ -123,7 +124,7 @@ OrganizePointCloud(const sensor_msgs::PointCloud2 msg,
   {
     for (int row=0; row < rings; row++)
     {
-      cloud(col, row) = tmp_cloud(col, row);
+      cloud(col, row) = tmp_cloud_ptr->at(col, row);
     }
   }
 }
